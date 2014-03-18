@@ -73,65 +73,48 @@ class Parser
 
         $currentRecord;
         while($rawline = $this->getLine()){
-            preg_match('|(\d+)\s+(\S+)(.*)|',$rawline,$matches);
-            $line = array_map('trim',$matches);
-            array_shift($line);
+            $lineParts = $this->parseLine($rawline);
 
             // not a valid line, skip it
-            if(count($line) < 2){
+            if(!$lineParts){
                 continue;
             }
 
-            // Remove empty matches from the .* above
-            if($line[2] == ''){
-                array_pop($line);
-            }
-
-            unset($level);
-            unset($type);
-            $value = FALSE;
-
-            // Find the line level, the type and value
-            $level = (int)$line[0];
-            if(preg_match('|@(.*)@|',$line[1],$matches)){
-                $value = $matches[1];
-                if(count($line) === 3){
-                    $type = $line[2];
-                }
-            }else{
-                $type = $line[1];
-                if(count($line) === 3){
-                    $value = preg_replace('|@(.*)@|',"\1",$line[2]);
-                }
-            }
-
             // Find the record the current line belongs in
-            while(isset($currentRecord) && $level <= $currentRecord->getLevel()){
+            while(isset($currentRecord) && $lineParts['level'] <= $currentRecord->getLevel()){
                 $currentRecord = $currentRecord->getParent();
             }
 
+            // Top level record here
             if(!isset($currentRecord)){
-                $currentRecord = new \GedCacheFast\Record($level,$type,$value);
-
-                // Make records arrays if needed
-                if(!array_key_exists($type,$this->_records)){
-                    $this->_records[$type] = Array();
-                }
-                if($value !== FALSE && !array_key_exists($value,$this->_records[$type])){
-                    $this->_records[$type][$value] = Array();
-                }
-
-                // Add to records array
-                if($value !== FALSE){
-                    $this->_records[$type][$value] = $currentRecord;
-                }else{
-                    $this->_records[$type][] = $currentRecord;
-                }
+                $currentRecord = new \GedCacheFast\Record($lineParts);
+                $this->cacheRecord($lineParts,$currentRecord);
             }else{
-                $currentRecord = $currentRecord->addChild($level,$type,$value);
+                $currentRecord = $currentRecord->addChild($lineParts);
+            }
+        }
+
+        print_r(array_keys($this->_records));
+    }
+
+    /**
+     * Magic all the get* functions so we can handle unknown types
+     */
+    function __call($func,$args){
+        print $func;
+        print_r($args);
+        print_r(func_get_args());
+
+        if(preg_match('/getAll(.*)/',$func,$matches)){
+            $ak = array_keys($this->_records);
+            if(array_key_exists($matches[1],$this->_records)){
+                return $this->records[$matches[1]];
+            }else{
+                return Array();
             }
         }
     }
+
 
     /*
      * Get a single line, taking into account CONT/CONC
@@ -175,5 +158,92 @@ class Parser
         }
 
         return $line;
+    }
+
+    /**
+     * Parses a single gedcom record line (a line, plus the CONT/CONC lines)
+     *
+     * Supported formats are: 
+     *
+     * Level LABEL 
+     * Level LABEL Value 
+     * Level LABEL @REF@
+     * Level @ID@ LABEL 
+     * Level @ID@ LABEL Value
+     *
+     * @return FALSE if the line is invalid, an hash of line parts if the line good
+     */
+    private function parseLine($rawline){
+        $line = Array(
+            'level' => FALSE,
+            'type' => FALSE,
+            'id'    => FALSE,
+            'ref'   => FALSE,
+            'value' => FALSE
+        );
+
+        // * Level LABEL 
+        if(preg_match("|^\s*(\d+)\s+([A-Z]+)\s*$|",$rawline,$matches)){
+            $line['level'] = (int)$matches[1]; 
+            $line['type'] = $matches[2];
+            return $line;
+        }
+
+        // * Level LABEL Value 
+        if(preg_match("|^\s*(\d+)\s+([A-Z]+)\s*(.*)$|",$rawline,$matches)){
+            $line['level'] = (int)$matches[1]; 
+            $line['type'] = $matches[2];
+            $line['value'] = $matches[3];
+            return $line;
+        }
+
+        // * Level LABEL @REF@
+        if(preg_match("|^\s*(\d+)\s+([A-Z]+)\s*(.*)$|",$rawline,$matches)){
+            $line['level'] = (int)$matches[1]; 
+            $line['type'] = $matches[2];
+            $line['ref'] = $matches[3];
+            return $line;
+        }
+
+        // * Level @ID@ LABEL 
+        if(preg_match("|^\s*(\d+)\s+@(.*?)@\s*([A-Z]+)$|",$rawline,$matches)){
+            $line['level'] = (int)$matches[1]; 
+            $line['id'] = $matches[2];
+            $line['type'] = $matches[3];
+            return $line;
+        }
+
+        // * Level @ID@ LABEL Value
+        if(preg_match("|^\s*(\d+)\s+@(.*?)@\s*([A-Z]+)\s*(.*)$|",$rawline,$matches)){
+            $line['level'] = (int)$matches[1]; 
+            $line['id'] = $matches[2];
+            $line['type'] = $matches[3];
+            $line['value'] = $matches[4];
+            return $line;
+        }
+
+        return FALSE;
+    }
+
+    /**
+     * Cache a single record for later lookup.
+     *
+     * In the future this could be replaced with a version that only records file positions or something
+     */
+    private function cacheRecord($lineParts,$currentRecord){
+        // Make records arrays if needed
+        if(!array_key_exists($lineParts['type'],$this->_records)){
+            $this->_records[$lineParts['type']] = Array();
+        }
+        if($lineParts['value'] !== FALSE && !array_key_exists($lineParts['value'],$this->_records[$lineParts['type']])){
+            $this->_records[$lineParts['type']][$lineParts['value']] = Array();
+        }
+
+        // Add to records array
+        if($lineParts['value'] !== FALSE){
+            $this->_records[$lineParts['type']][$lineParts['value']] = $currentRecord;
+        }else{
+            $this->_records[$lineParts['type']][] = $currentRecord;
+        }
     }
 }

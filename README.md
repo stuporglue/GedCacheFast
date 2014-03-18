@@ -45,8 +45,11 @@ Tags which are NOT at the top level and have an ID in them will reference a
 top level object of the given ID
 CONT/CONC will be respected 
 
-This parser assumes that anything matching the following two patterns are valid GEDCOM lines: 
+This parser assumes that anything matching the following patterns are valid GEDCOM lines: 
 
-    \s*\d+\s+\S+\s*
+ * Level LABEL 
+ * Level LABEL Value 
+ * Level LABEL @REF@
+ * Level @ID@ LABEL 
+ * Level @ID@ LABEL Value
 
-    \s*\d+\s+\S+\s+.+\s*

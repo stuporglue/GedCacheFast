@@ -30,6 +30,11 @@ class Record
     protected $_type;
 
     /*
+     * What is the ID for this record? 
+     */
+    protected $_id;
+
+    /*
      * What's the value of this record?
      */
     protected $_value;
@@ -42,21 +47,15 @@ class Record
     /*
      * Make a new record
      *
-     * @param $level (required,int) Level of the record
-     *
-     * @param $type (required,string) Type of the record
-     *
-     * @param $value (optional,string) Value of the record
-     *
-     * @param $parent (optional,GedFast\Record) Parent record of this record
-     *
      */
-    function __construct($level,$type,$value,\GedCacheFast\Record $parent = NULL){
-        $this->_level = $level;
-        $this->_type = $type;
-        if($value !== FALSE){
-            $this->_value = $value;
+    function __construct($parsedLineArray,\GedCacheFast\Record $parent = NULL){
+        foreach($parsedLineArray as $k => $v){
+            if($v !== FALSE){
+                $varname = "_$k";
+                $this->$varname = $v;
+            }
         }
+
         if(!is_null($parent)){
             $this->_parent = $parent;
         }
@@ -85,9 +84,9 @@ class Record
      *
      * @return The newly created record
      */
-    function addChild($level,$type,$value){
-        $child = new \GedCacheFast\Record($level,$type,$value,$this);
-        $this->_children[$type][] = $child;
+    function addChild($parsedLineArray){
+        $child = new \GedCacheFast\Record($parsedLineArray,$this);
+        $this->_children[$parsedLineArray['type']][] = $child;
         return $child;
     }
 }
